@@ -14,18 +14,22 @@ wav_filelist = sorted(os.listdir(path_to_wav_files))
 
 #params
 list_of_filler_types=['f1', 'f2', 'f3', 'ff1']
+tier_categories=['instructor_df','instructee_df', 'len']
 
 print(xml_filelist)
 print(wav_filelist)
 
 for file_idx in range(len(xml_filelist)):
     wav_file=wave.open(os.path.join(path_to_wav_files,wav_filelist[file_idx]))
-    with open(os.path.join(path_to_xml_files, xml_filelist[0]), encoding='utf-8') as fd:
+    with open(os.path.join(path_to_xml_files, xml_filelist[file_idx]), encoding='utf-8') as fd:
         xml_file = xmltodict.parse(fd.read(), encoding='utf-8')
     # create directory to save fillers in this concrete wav file
-    directory_to_save=os.path.join(path_to_save, wav_file.split('.')[0])
+    directory_to_save=os.path.join(path_to_save, wav_filelist[file_idx].split('.')[0])
     if not os.path.exists(directory_to_save):
         os.mkdir(directory_to_save)
+    tiers=xml_file['basic-transcription']['basic-body']['tier']
+    for tier in tiers:
+        pass
 
 
 
