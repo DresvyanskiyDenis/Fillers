@@ -85,7 +85,7 @@ class fillers_extractor_BeMaTaC(fillers_extractor):
                         extracted_utterances.append([extracted_audio, label, event_start_id, event_end_id])
         return extracted_utterances
 
-    def save_utterances_in_dir(self, path_to_dir, extracted_utterances):
+    def save_utterances_in_dir(self, path_to_dir:str, extracted_utterances:list):
         for extracted_audio, label, event_start_id, event_end_id in extracted_utterances:
             filename = '%s_%s_%s.wav' % (label, event_start_id, event_end_id)
             full_path = os.path.join(path_to_dir, label, filename)
