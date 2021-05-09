@@ -1,17 +1,19 @@
 import os
 
 import numpy as np
+import pandas as pd
 
 from src.BeMaTaC.Fillers_extraction.Fillers_extraction import fillers_extractor_BeMaTaC
 
 if __name__ == "__main__":
     # params
-    path_to_xml_files = 'C:\\Users\\Dresvyanskiy\\Desktop\\BeMaTaC\\MapTask_Ger\\l1_exmaralda_2.1'
-    path_to_wav_files = 'C:\\Users\\Dresvyanskiy\\Desktop\\BeMaTaC\\MapTask_Ger\\l1_wav_2.1'
-    path_to_save = 'C:\\Users\\Dresvyanskiy\\Desktop\\BeMaTaC\\MapTask_Ger\\extracted_fillers'
+    path_to_xml_files = r'E:\Databases\BeMaTaC\MapTask_Ger\l1_exmaralda_2.1'
+    path_to_wav_files = 'E:\Databases\BeMaTaC\MapTask_Ger\l1_wav_2.1'
+    path_to_save = 'E:\Databases\BeMaTaC\MapTask_Ger\extracted_fillers_without_fillers'
     list_of_filler_types = ['f1', 'f2', 'f3', 'ff1']
     entities = ['instructor_df', 'instructee_df']
-    pad_sec_to_segment = 0.3
+    pad_sec_to_segment = 1.5
+    cut_off_filler=True
     path_to_save += '_' + str(pad_sec_to_segment)
 
     xml_filelist = sorted(os.listdir(path_to_xml_files))
@@ -43,4 +45,5 @@ if __name__ == "__main__":
             if not os.path.exists(os.path.join(directory_to_save_fillers_from_file, filler_type)):
                 os.mkdir(os.path.join(directory_to_save_fillers_from_file, filler_type))
         # save extracted audios
-        extractor.save_utterances_in_dir(path_to_dir=directory_to_save_fillers_from_file, extracted_utterances=extracted_utterances)
+        extractor.save_utterances_in_dir(path_to_dir=directory_to_save_fillers_from_file,
+                                         extracted_utterances=extracted_utterances, cut_off_filler=cut_off_filler)

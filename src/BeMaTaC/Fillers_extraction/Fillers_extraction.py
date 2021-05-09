@@ -82,11 +82,27 @@ class fillers_extractor_BeMaTaC(fillers_extractor):
                         assert (audio_chunk.shape[0] == overall_length)
                         extracted_audio = audio_chunk
                         label = event['#text']
-                        extracted_utterances.append([extracted_audio, label, event_start_id, event_end_id])
+                        relative_start_idx=int(pad_sec*self.sample_rate)
+                        relative_end_idx = int(relative_start_idx+(event_timings[event_end_id]-event_timings[event_start_id])*self.sample_rate)
+                        extracted_utterances.append([extracted_audio, label, event_start_id,
+                                                     event_end_id, relative_start_idx, relative_end_idx])
         return extracted_utterances
 
-    def save_utterances_in_dir(self, path_to_dir:str, extracted_utterances:list):
-        for extracted_audio, label, event_start_id, event_end_id in extracted_utterances:
+    def save_utterances_in_dir(self, path_to_dir:str, extracted_utterances:list, cut_off_filler:bool=False):
+        metainformation = pd.DataFrame(columns=['relative_path', 'filler_start_idx', 'filler_end_idx', 'filler_type'])
+        for extracted_audio, label, event_start_id, event_end_id, event_start_idx, event_end_idx in extracted_utterances:
+
             filename = '%s_%s_%s.wav' % (label, event_start_id, event_end_id)
+            # save metainformation to dataframe
+            row = {'relative_path':os.path.join(label, filename),
+                  'filler_start_idx':event_start_idx,
+            'filler_end_idx':event_end_idx,
+            'filler_type':label
+            }
+            metainformation=metainformation.append(row, ignore_index=True)
             full_path = os.path.join(path_to_dir, label, filename)
+            # cut off filler if needed
+            if cut_off_filler:
+                extracted_audio=np.concatenate([extracted_audio[:event_start_idx],extracted_audio[event_end_idx:]])
             self.write_wav_file(full_path, extracted_audio, self.sample_rate)
+        metainformation.to_csv(os.path.join(path_to_dir, 'metainformation.csv'), index=False)
