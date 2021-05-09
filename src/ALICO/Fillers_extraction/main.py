@@ -16,8 +16,6 @@ labels_timesteps_data_type=Dict[str,List[Tuple[float, float]
                                         ]
                                 ]
 
-
-
 def extract_label_timesteps_from_file(path:str, labels:Tuple[str,...])->labels_timesteps_data_type:
     # TODO: write description
     try:
@@ -65,15 +63,24 @@ def extract_utterance_according_timesteps(path_to_file:str, timesteps:Tuple[floa
     start_in_int=int(np.round(timesteps[0]*sample_rate)-np.round(additional_interval*sample_rate))
     end_in_int=int(np.round(timesteps[1]*sample_rate)+np.round(additional_interval*sample_rate))
     # check if we are out of range of wav_file
-    if start_in_int<0: start_in_int = 0
-    if end_in_int>wav_file.shape[0]: end_in_int =wav_file.shape[0]
-    return wav_file[start_in_int: end_in_int], sample_rate
+    if start_in_int<0:
+        start_in_int = 0
+        end_in_int = int(timesteps[1]*sample_rate)
+    if end_in_int>wav_file.shape[0]:
+        end_in_int =wav_file.shape[0]
+        start_in_int = wav_file.shape[0]-int(timesteps[0]*sample_rate)
+    # calculate relative timings for fillers in seconds
+    relative_start_filler=int(timesteps[0]*sample_rate-start_in_int)
+    relative_end_filler=relative_start_filler+int((timesteps[1]-timesteps[0])*sample_rate)
+    return wav_file[start_in_int: end_in_int], sample_rate, (relative_start_filler, relative_end_filler)
 
 def extract_utterances_from_all_files(filename_timesteps:List[Tuple[str, labels_timesteps_data_type]], additional_interval:float,
                                       path_to_data:str, output_path:str)->None:
     # create output directory, if it does not exist
     if not os.path.exists(output_path):
         os.makedirs(output_path)
+    # create dataframe with all meta information for every extracted filler
+    meta_information=pd.DataFrame(columns=['relative_path','filler_start_idx','filler_end_idx', 'filler_type'])
     # iterate through all instances
     for filename, label_timesteps in filename_timesteps:
         labels=list(label_timesteps.keys())
@@ -86,20 +93,91 @@ def extract_utterances_from_all_files(filename_timesteps:List[Tuple[str, labels_
             for start_point, end_point in label_timesteps[label]:
                 # extract utterance from audio
                 if start_point is not None and end_point is not None:
-                    audio_utterance, sample_rate=extract_utterance_according_timesteps(path_to_file=os.path.join(path_to_data, filename_without_extention+'.wav'),
+                    absolut_path=os.path.join(output_path, filename_without_extention,label,
+                                               '%.2f_%.2f.wav'%(start_point, end_point))
+                    relative_path=os.path.join(filename_without_extention,label,
+                                               '%.2f_%.2f.wav'%(start_point, end_point))
+                    # extract utterance
+                    audio_utterance, sample_rate, \
+                    relative_filler_timings=extract_utterance_according_timesteps(path_to_file=os.path.join(path_to_data, filename_without_extention+'.wav'),
                                                                           timesteps=(start_point, end_point),
                                                                           additional_interval=additional_interval)
-                    write_wav_file(path=os.path.join(output_path, filename_without_extention,label, '%.2f_%.2f.wav'%(start_point, end_point)),
-                                                     data=audio_utterance, sample_rate=sample_rate)
+                    # save all meta information
+                    new_row={'relative_path':relative_path,
+                             'filler_start_idx':relative_filler_timings[0],
+                             'filler_end_idx':relative_filler_timings[1],
+                             'filler_type':label
+                    }
+                    meta_information=meta_information.append(new_row, ignore_index=True)
+                    # save extracted utterance with interval
+                    write_wav_file(path=absolut_path, data=audio_utterance, sample_rate=sample_rate)
+    meta_information.to_csv(os.path.join(output_path, 'metainformation.csv'), index=False)
 
+
+def extract_utterance_with_deleted_filler_according_timesteps(path_to_file:str, timesteps:Tuple[float, float], additional_interval:float=0):
+    # TODO: write description
+    sample_rate, wav_file = read_wav_file(path_to_file)
+    # recalculate start and end point in terms of indexes (int). Expand window by additional_interval as well.
+    start_in_int=int(np.round(timesteps[0]*sample_rate)-np.round(additional_interval*sample_rate))
+    end_in_int=int(np.round(timesteps[1]*sample_rate)+np.round(additional_interval*sample_rate))
+    # check if we are out of range of wav_file
+    if start_in_int<0:
+        start_in_int = 0
+        end_in_int = int(timesteps[1]*sample_rate)
+    if end_in_int>wav_file.shape[0]:
+        end_in_int =wav_file.shape[0]
+        start_in_int = wav_file.shape[0]-int(timesteps[0]*sample_rate)
+    # calculate relative timings for fillers in seconds
+    relative_start_filler=int(timesteps[0]*sample_rate-start_in_int)
+    relative_end_filler=relative_start_filler+int((timesteps[1]-timesteps[0])*sample_rate)
+    return wav_file[start_in_int: end_in_int, 0], sample_rate, (relative_start_filler, relative_end_filler)
+
+def extract_utterances_with_deleted_filler_from_all_files(filename_timesteps:List[Tuple[str, labels_timesteps_data_type]], additional_interval:float,
+                                      path_to_data:str, output_path:str)->None:
+    # create output directory, if it does not exist
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    # create dataframe with all meta information for every extracted filler
+    meta_information=pd.DataFrame(columns=['relative_path','filler_start_idx','filler_end_idx', 'filler_type'])
+    # iterate through all instances
+    for filename, label_timesteps in filename_timesteps:
+        labels=list(label_timesteps.keys())
+        filename_without_extention=filename.split('.')[0]
+        for label in labels:
+            # create dir with name of audiofile and inside it with names of labels
+            if not os.path.exists(os.path.join(output_path, filename_without_extention,label)):
+                os.makedirs(os.path.join(output_path, filename_without_extention,label), exist_ok=True)
+            # iterate over all timesteps with assigned to this concrete label
+            for start_point, end_point in label_timesteps[label]:
+                # extract utterance from audio
+                if start_point is not None and end_point is not None:
+                    absolut_path=os.path.join(output_path, filename_without_extention,label,
+                                               '%.2f_%.2f.wav'%(start_point, end_point))
+                    relative_path=os.path.join(filename_without_extention,label,
+                                               '%.2f_%.2f.wav'%(start_point, end_point))
+                    # extract utterance
+                    audio_utterance, sample_rate, \
+                    relative_filler_timings=extract_utterance_with_deleted_filler_according_timesteps(path_to_file=os.path.join(path_to_data, filename_without_extention+'.wav'),
+                                                                          timesteps=(start_point, end_point),
+                                                                          additional_interval=additional_interval)
+                    # save all meta information
+                    new_row={'relative_path':relative_path,
+                             'filler_start_idx':relative_filler_timings[0],
+                             'filler_end_idx':relative_filler_timings[1],
+                             'filler_type':label
+                    }
+                    meta_information=meta_information.append(new_row, ignore_index=True)
+                    # save extracted utterance with interval
+                    write_wav_file(path=absolut_path, data=audio_utterance, sample_rate=sample_rate)
+    meta_information.to_csv(os.path.join(output_path, 'metainformation.csv'), index=False)
 
 
 if __name__ == '__main__':
-    path_to_labels=r'D:\Databases\ALICO\ALICO\alico_coop\segmentation'
-    path_to_data=r'D:\Databases\ALICO\ALICO\recordings'
-    for add_interval in (0.2, 0.5, 1, 1.5):
-        path_to_output=r'D:\Databases\ALICO\ALICO\extracted_utterances_%.1f'%add_interval
+    path_to_labels=r'E:\Databases\ALICO\ALICO\alico_coop\segmentation'
+    path_to_data=r'E:\Databases\ALICO\ALICO\recordings'
+    for add_interval in (1.5,):
+        path_to_output=r'E:\Databases\ALICO\ALICO\extracted_utterances_with_deleted_fillers_%.1f'%add_interval
         #grid = textgrids.TextGrid(path_to_file)
-        label_timesteps=extract_label_timesteps_from_files_in_dir(path_to_labels, labels=('mhm', 'm'))
-        extract_utterances_from_all_files(label_timesteps, additional_interval=add_interval,
+        label_timesteps=extract_label_timesteps_from_files_in_dir(path_to_labels, labels=('ja','m','mhm','okay','achso','ah'))
+        extract_utterances_with_deleted_filler_from_all_files(label_timesteps, additional_interval=add_interval,
                                           path_to_data=path_to_data, output_path=path_to_output)
